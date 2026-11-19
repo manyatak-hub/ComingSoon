@@ -15,8 +15,8 @@ const LEAN = -0.22 // a slight backward lean, like a carved monument
 const LAYOUTS = {
   line: [{ text: 'COMING SOON', z: 0.4, size: 1.0 }],
   stack: [
-    { text: 'COMING', z: -1.3, size: 1.0 },
-    { text: 'SOON', z: 1.1, size: 1.0 },
+    { text: 'COMING', z: -2.6, size: 1.0 },
+    { text: 'SOON', z: 2.0, size: 1.0 },
   ],
 }
 

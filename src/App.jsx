@@ -23,14 +23,18 @@ function CameraRig() {
 
   useFrame(({ clock }) => {
     const aspect = size.width / size.height
-    const vFov = THREE.MathUtils.degToRad(30)
-    const fitDist = (beach.textWidth * (aspect < 0.95 ? 1.1 : 1.3)) / (2 * Math.tan(vFov / 2) * aspect)
+    // Tall phone screens stack the words on two lines: a wider lens from a little higher keeps them apart
+    const tall = aspect < 0.95
+    const fov = tall ? 45 : 30
+    const vFov = THREE.MathUtils.degToRad(fov)
+    const fitDist = (beach.textWidth * (tall ? 1.15 : 1.3)) / (2 * Math.tan(vFov / 2) * aspect)
     const dist = Math.max(13, fitDist)
     const t = reducedMotion ? 0 : clock.elapsedTime
-    camera.position.set(Math.sin(t * 0.1) * 0.5, dist * 0.16 + 1.2 + Math.sin(t * 0.2) * 0.06, dist + 0.8)
-    camera.fov = 30 + beat.current.k * 0.2
+    const height = tall ? dist * 0.38 + 1 : dist * 0.16 + 1.2
+    camera.position.set(Math.sin(t * 0.1) * 0.5, height + Math.sin(t * 0.2) * 0.06, dist + 0.8)
+    camera.fov = fov + beat.current.k * 0.2
     camera.updateProjectionMatrix()
-    camera.lookAt(target)
+    camera.lookAt(target.x, tall ? 1.5 : target.y, target.z)
   })
   return null
 }
