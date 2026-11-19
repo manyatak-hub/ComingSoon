@@ -101,6 +101,9 @@ body {
 
 @media (max-width: 520px) {
   .rule { display: none; }
+  .bottom { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
+  .sound { font-size: 0.98rem; padding: 7px 16px 7px 13px; }
+  .brand { gap: 5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sound, .eyebrow, .rule { animation: none; }

@@ -2,20 +2,24 @@ import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { PartyMusic } from './audio'
 import { bus } from './store'
 
-// The public page plays a video recorded from our 3D beach, so it runs smoothly on any phone.
-//   ?live                      runs the 3D scene in real time instead
-//   ?capture=landscape|portrait renders the scene for recording (no text, no music)
+// The public page plays a video recorded from our 3D shoreline, so it runs smoothly on any phone.
+//   ?live                       runs the shoreline scene in real time instead
+//   ?cove                       runs the earlier tropical-cove scene in real time
+//   ?capture=landscape|portrait renders the shoreline for recording (no text, no music)
 const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
 const CAPTURE = params.get('capture')
-const LIVE = params.has('live')
+const COVE = params.has('cove')
+const LIVE = params.has('live') || COVE
 
+const ShoreScene = lazy(() => import('./ShoreScene.jsx'))
 const LiveBeach = lazy(() => import('./LiveBeach.jsx'))
+const Live3D = (props) => (COVE ? <LiveBeach {...props} /> : <ShoreScene {...props} />)
 
 // Where the brand line sits inside each video, as a fraction of the video's height,
 // so it always lands just under the gold letters however the video is cropped.
 const VIDEOS = {
-  landscape: { name: 'beach-landscape', w: 1920, h: 1080, brandY: 0.7 },
-  portrait: { name: 'beach-portrait', w: 720, h: 1280, brandY: 0.68 },
+  landscape: { name: 'beach-landscape', w: 1920, h: 1080, brandY: 0.768 },
+  portrait: { name: 'beach-portrait', w: 720, h: 1280, brandY: 0.805 },
 }
 
 function useOrientation() {
@@ -77,7 +81,7 @@ export default function App() {
     return (
       <main className="stage capture">
         <Suspense fallback={null}>
-          <LiveBeach capture />
+          <ShoreScene capture />
         </Suspense>
       </main>
     )
@@ -135,7 +139,7 @@ function Page() {
     <main className="stage" onClick={toggle}>
       {LIVE ? (
         <Suspense fallback={null}>
-          <LiveBeach />
+          <Live3D />
         </Suspense>
       ) : (
         <BeachVideo v={v} />

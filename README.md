@@ -1,17 +1,18 @@
 # Bastian Beachfront Alibaug: Coming Soon
 
-A "Coming Soon" page set in a tropical cove. Gold letters rise out of the sand, then a slow wave washes them away into gold dust. "Bastian Beachfront, Alibaug" sits beneath them. Tap anywhere to start or stop the lounge music.
+A "Coming Soon" page looking down at the water's edge. "COMING SOON" is written into the sand among shells and seaweed; a clear turquoise wave builds, breaks into lacy foam and washes the words away, then slides back leaving shining wet sand. "Bastian Beachfront, Alibaug" sits beneath. Tap anywhere to start or stop the lounge music.
 
 ## How it works
 
-The beach is a real-time 3D scene (React Three Fiber, Drei, postprocessing, GSAP). Rendering it live is too heavy for many phones, so the public page plays a **video recorded from that scene**: one for wide screens and one for phones. The page itself is only about 50 KB of code.
+The shoreline is a real-time 3D scene (React Three Fiber, postprocessing, GSAP, custom water and sand shaders) in `src/ShoreScene.jsx`. Rendering it live is too heavy for many phones, so the public page plays a **video recorded from that scene**: one for wide screens and one for phones. The page itself is only about 50 KB of code.
 
 The music is synthesized with the Web Audio API. It is rendered once into a seamless loop shortly after the page loads, so playback never stutters.
 
 | Address | What it shows |
 | --- | --- |
 | `/` | The video page (default) |
-| `/?live` | The live 3D scene in real time |
+| `/?live` | The shoreline scene in real time |
+| `/?cove` | The earlier tropical-cove scene in real time (`src/LiveBeach.jsx`) |
 | `/?capture=landscape` or `/?capture=portrait` | The scene prepared for recording (no text or music) |
 
 ## Run locally

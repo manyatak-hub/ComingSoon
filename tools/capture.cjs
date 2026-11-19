@@ -12,7 +12,7 @@ const fs = require('fs');
   await p.clock.install({ time: 0 });
   await p.goto(`${process.env.URL || "http://localhost:4173"}/?capture=${orient}`);
   for (let i = 0; i < 600; i++) {
-    const ready = await p.evaluate(() => !!(window.__advance && window.__cycle));
+    const ready = await p.evaluate(() => !!(window.__advance && window.__cycle && window.__textReady));
     if (ready) break;
     await p.clock.runFor(20);
     await p.waitForTimeout(50);
