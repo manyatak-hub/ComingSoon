@@ -36,20 +36,18 @@ const KEYS = [
 
 export class PartyMusic {
   constructor() {
-    this.ctx = null
+    this.live = null // the AudioContext that plays the finished loop
+    this.loop = null // AudioBuffer holding one seamless 4-bar loop
+    this.rendering = null
     this.playing = false
-    this.step = 0
-    this.nextTime = 0
-    this.timer = null
     this.onBeat = null
   }
 
-  _init() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+  // Build the mixing chain (compressor, reverb hall, echo) on any audio context
+  _build(ctx) {
     this.ctx = ctx
-
     this.master = ctx.createGain()
-    this.master.gain.value = 0
+    this.master.gain.value = 0.6
     const comp = ctx.createDynamicsCompressor()
     comp.threshold.value = -18
     comp.ratio.value = 3
@@ -57,9 +55,8 @@ export class PartyMusic {
     comp.release.value = 0.2
     this.master.connect(comp).connect(ctx.destination)
 
-    // Reverb hall from a generated impulse response
     this.reverb = ctx.createConvolver()
-    const len = ctx.sampleRate * 2.8
+    const len = Math.floor(ctx.sampleRate * 2.8)
     const ir = ctx.createBuffer(2, len, ctx.sampleRate)
     for (let c = 0; c < 2; c++) {
       const d = ir.getChannelData(c)
@@ -70,7 +67,6 @@ export class PartyMusic {
     rvb.gain.value = 0.32
     this.reverb.connect(rvb).connect(this.master)
 
-    // Dotted-eighth echo
     this.delay = ctx.createDelay(1)
     this.delay.delayTime.value = STEP * 3
     const fb = ctx.createGain()
@@ -90,41 +86,79 @@ export class PartyMusic {
     for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1
   }
 
+  // Compose the loop ahead of time, off the main thread, so playback can never stutter.
+  // Two passes are rendered and the second kept, so reverb and echo tails wrap seamlessly.
+  prepare() {
+    if (this.rendering) return this.rendering
+    this.rendering = (async () => {
+      const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext
+      const rate = 44100
+      const loopLen = Math.round(64 * STEP * rate)
+      const off = new Offline(2, loopLen * 2, rate)
+      this._build(off)
+      for (let i = 0; i < 128; i++) this._playStep(i % 64, i * STEP)
+      const rendered = await off.startRendering()
+      const loop = new AudioBuffer({ length: loopLen, numberOfChannels: 2, sampleRate: rate })
+      for (let c = 0; c < 2; c++) loop.copyToChannel(rendered.getChannelData(c).subarray(loopLen, loopLen * 2), c)
+      this.loop = loop
+      return loop
+    })()
+    return this.rendering
+  }
+
   async start() {
-    if (!this.ctx) this._init()
-    if (this.ctx.state === 'suspended') await this.ctx.resume()
     if (this.playing) return
     this.playing = true
-    const t = this.ctx.currentTime
-    this.master.gain.cancelScheduledValues(t)
-    this.master.gain.setValueAtTime(this.master.gain.value, t)
-    this.master.gain.linearRampToValueAtTime(0.6, t + 1.5)
-    clearInterval(this.timer)
-    this.nextTime = t + 0.05
-    this.timer = setInterval(() => this._schedule(), 25)
+    if (!this.live) {
+      this.live = new (window.AudioContext || window.webkitAudioContext)()
+      this.out = this.live.createGain()
+      this.out.gain.value = 0
+      this.out.connect(this.live.destination)
+    }
+    // resume inside the tap so mobile browsers allow sound
+    const resumed = this.live.state === 'suspended' ? this.live.resume() : Promise.resolve()
+    const loop = await this.prepare()
+    await resumed
+    if (!this.playing) return
+    const t = this.live.currentTime
+    if (!this.src) {
+      this.src = this.live.createBufferSource()
+      this.src.buffer = loop
+      this.src.loop = true
+      this.src.connect(this.out)
+      this.src.start(t + 0.05)
+      this.t0 = t + 0.05
+    }
+    this.out.gain.cancelScheduledValues(t)
+    this.out.gain.setValueAtTime(this.out.gain.value, t)
+    this.out.gain.linearRampToValueAtTime(1, t + 1.2)
+    this._watchBeats()
   }
 
   stop() {
-    if (!this.ctx || !this.playing) return
+    if (!this.live || !this.playing) return
     this.playing = false
-    const t = this.ctx.currentTime
-    this.master.gain.cancelScheduledValues(t)
-    this.master.gain.setValueAtTime(this.master.gain.value, t)
-    this.master.gain.linearRampToValueAtTime(0, t + 0.8)
-    setTimeout(() => {
-      if (!this.playing) {
-        clearInterval(this.timer)
-        this.ctx.suspend()
-      }
-    }, 900)
+    const t = this.live.currentTime
+    this.out.gain.cancelScheduledValues(t)
+    this.out.gain.setValueAtTime(this.out.gain.value, t)
+    this.out.gain.linearRampToValueAtTime(0, t + 0.7)
+    setTimeout(() => !this.playing && this.live.suspend(), 800)
   }
 
-  _schedule() {
-    while (this.nextTime < this.ctx.currentTime + 0.12) {
-      this._playStep(this.step, this.nextTime)
-      this.nextTime += STEP
-      this.step = (this.step + 1) % 64
+  // Report each beat to the visuals by reading the audio clock (cheap, drift-free)
+  _watchBeats() {
+    let last = -1
+    const beat = 60 / BPM
+    const tick = () => {
+      if (!this.playing) return
+      const b = Math.floor((this.live.currentTime - this.t0) / beat)
+      if (b !== last && b >= 0) {
+        last = b
+        this.onBeat?.(b % 4 === 0)
+      }
+      requestAnimationFrame(tick)
     }
+    requestAnimationFrame(tick)
   }
 
   _playStep(step, t) {
@@ -134,10 +168,6 @@ export class PartyMusic {
 
     if (s % 4 === 0) {
       this._kick(t)
-      if (this.onBeat) {
-        const ms = Math.max(0, (t - this.ctx.currentTime) * 1000)
-        setTimeout(() => this.playing && this.onBeat?.(s === 0), ms)
-      }
     }
     if (s === 4 || s === 12) this._snap(t)
     this._shaker(t, s % 4 === 2 ? 0.07 : 0.025)

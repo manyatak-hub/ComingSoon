@@ -116,7 +116,12 @@ export default function App() {
       const z = -1 + Math.random() * 4
       bus.emit('dust', { at: new THREE.Vector3(x, sandHeight(x, z) + 0.2, z), count: downbeat ? 14 : 6, rise: 0.8, spread: 1.2 })
     }
-    return () => music.stop()
+    // compose the music loop in the background once the scene has loaded
+    const id = setTimeout(() => music.prepare().catch(() => {}), 2500)
+    return () => {
+      clearTimeout(id)
+      music.stop()
+    }
   }, [music])
 
   // Tap anywhere: play / pause
