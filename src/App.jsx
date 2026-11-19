@@ -1,123 +1,102 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, PerformanceMonitor, Sky as PhysicalSky } from '@react-three/drei'
-import { EffectComposer, Bloom, Vignette, Noise, ToneMapping } from '@react-three/postprocessing'
-import { ToneMappingMode } from 'postprocessing'
-import * as THREE from 'three'
-import gsap from 'gsap'
-import { CloudLayer, Sand, Ocean, Palms, Headlands, Boulders, Gulls } from './Environment'
-import { Letters } from './Letters'
-import { GoldDust } from './GoldDust'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PartyMusic } from './audio'
-import { bus, sandHeight, beach, reducedMotion, goldEnv, SUN_DIR } from './store'
+import { bus } from './store'
 
-// Phones and tablets get a lighter render: fewer pixels, no multisampling, no film grain
-const IS_MOBILE =
-  typeof window !== 'undefined' &&
-  (window.matchMedia?.('(pointer: coarse)').matches || Math.min(window.screen.width, window.screen.height) < 820)
+// The public page plays a video recorded from our 3D beach, so it runs smoothly on any phone.
+//   ?live                      runs the 3D scene in real time instead
+//   ?capture=landscape|portrait renders the scene for recording (no text, no music)
+const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '')
+const CAPTURE = params.get('capture')
+const LIVE = params.has('live')
 
-const MAX_DPR = IS_MOBILE ? 1.25 : 1.5
+const LiveBeach = lazy(() => import('./LiveBeach.jsx'))
 
-const SUN_POS = new THREE.Vector3(...SUN_DIR).normalize().multiplyScalar(1000)
-
-/* Keeps the words in frame on any screen, with a slow, cinematic drift */
-function CameraRig() {
-  const { camera, size } = useThree()
-  const target = useMemo(() => new THREE.Vector3(0, 1.0, -3), [])
-  const beat = useRef({ k: 0 })
-
-  useEffect(() => bus.on('beat', () => gsap.fromTo(beat.current, { k: 1 }, { k: 0, duration: 0.4, ease: 'power2.out' })), [])
-
-  useFrame(({ clock }) => {
-    const aspect = size.width / size.height
-    // Tall phone screens stack the words on two lines: a wider lens from a little higher keeps them apart
-    const tall = aspect < 0.95
-    const fov = tall ? 45 : 30
-    const vFov = THREE.MathUtils.degToRad(fov)
-    const fitDist = (beach.textWidth * (tall ? 1.15 : 1.3)) / (2 * Math.tan(vFov / 2) * aspect)
-    const dist = Math.max(13, fitDist)
-    const t = reducedMotion ? 0 : clock.elapsedTime
-    const height = tall ? dist * 0.38 + 1 : dist * 0.16 + 1.2
-    camera.position.set(Math.sin(t * 0.1) * 0.5, height + Math.sin(t * 0.2) * 0.06, dist + 0.8)
-    camera.fov = fov + beat.current.k * 0.2
-    camera.updateProjectionMatrix()
-    camera.lookAt(target.x, tall ? 1.5 : target.y, target.z)
-  })
-  return null
+// Where the brand line sits inside each video, as a fraction of the video's height,
+// so it always lands just under the gold letters however the video is cropped.
+const VIDEOS = {
+  landscape: { name: 'beach-landscape', w: 1920, h: 1080, brandY: 0.7 },
+  portrait: { name: 'beach-portrait', w: 720, h: 1280, brandY: 0.68 },
 }
 
-/* Reflections for the gold: a warm sunset studio made of light panels (no image downloads) */
-function GoldenHourReflections() {
-  return (
-    <Environment resolution={256} frames={1} scene={goldEnv}>
-      <PhysicalSky distance={450} sunPosition={SUN_POS} turbidity={3.2} rayleigh={1.1} mieCoefficient={0.004} mieDirectionalG={0.8} />
-      <mesh rotation-x={-Math.PI / 2} position-y={-1}>
-        <circleGeometry args={[400, 32]} />
-        <meshBasicMaterial color="#cdbb9c" />
-      </mesh>
-      <Lightformer form="rect" intensity={0.6} color="#ffe2b8" position={[0, 4, 14]} rotation-y={Math.PI} scale={[30, 6, 1]} />
-    </Environment>
-  )
+function useOrientation() {
+  const get = () => (window.innerWidth / window.innerHeight < 0.95 ? 'portrait' : 'landscape')
+  const [o, setO] = useState(get)
+  useEffect(() => {
+    const on = () => setO(get())
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  return o
 }
 
-function Scene() {
+/* Map a point in the video (object-fit: cover) to a screen position */
+function useBrandTop(v) {
+  const [top, setTop] = useState(null)
+  useLayoutEffect(() => {
+    const place = () => {
+      const W = window.innerWidth
+      const H = window.innerHeight
+      const scale = Math.max(W / v.w, H / v.h)
+      const shownH = v.h * scale
+      setTop((H - shownH) / 2 + v.brandY * shownH)
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
+  }, [v])
+  return top
+}
+
+function BeachVideo({ v }) {
+  const ref = useRef()
+  useEffect(() => {
+    // some mobile browsers need a nudge to start a muted inline video
+    ref.current?.play?.().catch(() => {})
+  }, [v.name])
   return (
-    <>
-      <color attach="background" args={['#cfe0ee']} />
-      <fog attach="fog" args={['#c8dbea', 120, 1100]} />
-      <hemisphereLight args={['#bcd6ff', '#d9c7a6', 1.6]} />
-      <directionalLight
-        position={SUN_POS.clone().normalize().multiplyScalar(80)}
-        intensity={7}
-        color="#fff0d8"
-        castShadow
-        shadow-mapSize={IS_MOBILE ? [1024, 1024] : [2048, 2048]}
-        shadow-camera-left={-28}
-        shadow-camera-right={28}
-        shadow-camera-top={28}
-        shadow-camera-bottom={-28}
-        shadow-camera-far={160}
-        shadow-bias={-0.0003}
-        shadow-normalBias={0.02}
-      />
-      <GoldenHourReflections />
-      <PhysicalSky distance={450000} sunPosition={SUN_POS} turbidity={3.2} rayleigh={1.1} mieCoefficient={0.004} mieDirectionalG={0.8} />
-      <CloudLayer />
-      <Headlands />
-      <Gulls />
-      <Sand />
-      <Ocean />
-      <Boulders />
-      <Palms />
-      <Letters />
-      <GoldDust />
-      <CameraRig />
-      <EffectComposer multisampling={IS_MOBILE ? 0 : 2} disableNormalPass>
-        <Bloom mipmapBlur luminanceThreshold={1.4} luminanceSmoothing={0.3} intensity={0.35} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        <Vignette offset={0.35} darkness={0.4} />
-        {!IS_MOBILE && <Noise opacity={0.03} premultiply />}
-      </EffectComposer>
-    </>
+    <video
+      ref={ref}
+      key={v.name}
+      className="beach-video"
+      poster={`/media/${v.name}.jpg`}
+      autoPlay
+      muted
+      loop
+      playsInline
+      preload="auto"
+      aria-hidden="true"
+    >
+      <source src={`/media/${v.name}.mp4`} type="video/mp4" />
+      <source src={`/media/${v.name}.webm`} type="video/webm" />
+    </video>
   )
 }
 
 export default function App() {
+  if (CAPTURE) {
+    return (
+      <main className="stage capture">
+        <Suspense fallback={null}>
+          <LiveBeach capture />
+        </Suspense>
+      </main>
+    )
+  }
+  return <Page />
+}
+
+function Page() {
   const music = useMemo(() => new PartyMusic(), [])
   const [on, setOn] = useState(false)
-  const [dpr, setDpr] = useState(IS_MOBILE ? 1 : 1.25)
   const busy = useRef(false)
+  const orientation = useOrientation()
+  const v = VIDEOS[orientation]
+  const brandTop = useBrandTop(v)
 
   useEffect(() => {
-    music.onBeat = (downbeat) => {
-      bus.emit('beat')
-      // a few motes of gold drift up on every beat while the music plays
-      const x = (Math.random() - 0.5) * 14
-      const z = -1 + Math.random() * 4
-      bus.emit('dust', { at: new THREE.Vector3(x, sandHeight(x, z) + 0.2, z), count: downbeat ? 14 : 6, rise: 0.8, spread: 1.2 })
-    }
-    // compose the music loop in the background once the scene has loaded
-    const id = setTimeout(() => music.prepare().catch(() => {}), 2500)
+    music.onBeat = (downbeat) => bus.emit('beat', downbeat)
+    // compose the music loop in the background once the page has loaded
+    const id = setTimeout(() => music.prepare().catch(() => {}), 1500)
     return () => {
       clearTimeout(id)
       music.stop()
@@ -135,7 +114,6 @@ export default function App() {
       } else {
         await music.start()
         setOn(true)
-        bus.emit('dust', { at: new THREE.Vector3(0, 0.6, 0.6), count: 120, rise: 1.2, spread: 5 })
       }
     } finally {
       busy.current = false
@@ -155,29 +133,21 @@ export default function App() {
 
   return (
     <main className="stage" onClick={toggle}>
-      <Canvas
-        shadows
-        dpr={dpr}
-        camera={{ fov: 30, near: 0.1, far: 1200, position: [0, 6, 13] }}
-        gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.42 }}
-      >
-        {/* drop the resolution if the device can't keep up, raise it again if it can */}
-        <PerformanceMonitor
-          onDecline={() => setDpr((d) => Math.max(0.75, d - 0.25))}
-          onIncline={() => setDpr((d) => Math.min(MAX_DPR, d + 0.25))}
-          flipflops={4}
-          onFallback={() => setDpr(0.75)}
-        />
+      {LIVE ? (
         <Suspense fallback={null}>
-          <Scene />
+          <LiveBeach />
         </Suspense>
-      </Canvas>
+      ) : (
+        <BeachVideo v={v} />
+      )}
 
-      <header className="top">
-        <span className="rule" aria-hidden="true" />
-        <p className="eyebrow">Something extraordinary is on the horizon</p>
-        <span className="rule" aria-hidden="true" />
-      </header>
+      <h1 className="sr-only">Coming Soon: Bastian Beachfront, Alibaug</h1>
+
+      <div className="brand" style={brandTop != null && !LIVE ? { top: brandTop } : undefined} aria-hidden="true">
+        <p className="brand-name">Bastian Beachfront</p>
+        <span className="brand-rule" />
+        <p className="brand-place">Alibaug</p>
+      </div>
 
       <footer className="bottom">
         <div className={`sound ${on ? 'is-on' : ''}`} role="status" aria-live="polite">

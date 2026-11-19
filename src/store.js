@@ -27,10 +27,6 @@ export const beach = {
   textWidth: 9, // set by the letters, read by the camera
 }
 
-// Holds the gold-only reflection map (kept off the sand so the beach stays natural)
-import { Scene } from 'three'
-export const goldEnv = new Scene()
-
 // Minimal event bus (gold dust, beat pulses)
 const listeners = {}
 export const bus = {

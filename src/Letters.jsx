@@ -5,7 +5,8 @@ import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import fontJson from './fonts/cinzel.typeface.json'
 import gsap from 'gsap'
-import { shoreHeight, sandHeight, beach, bus, goldEnv } from './store'
+import { shoreHeight, sandHeight, beach, bus } from './store'
+import { goldEnv } from './goldEnv'
 
 const font = new FontLoader().parse(fontJson)
 const BURIED = -1.5 // how far below the sand a letter hides
@@ -128,6 +129,7 @@ function LetterSet({ layout }) {
       tl.to({}, { duration: 0.6 })
     }
     cycle()
+    window.__cycle = tl.duration() // read by the video capture script
     return () => tl?.kill()
   }, [letters, gold])
 

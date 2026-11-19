@@ -105,3 +105,71 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .sound, .eyebrow, .rule { animation: none; }
 }
+
+/* ---------- Video page ---------- */
+.beach-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #cfe0ee;
+}
+
+.brand {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 72%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  pointer-events: none;
+  text-align: center;
+  animation: rise 2.4s 0.6s ease-out both;
+}
+.brand-name {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: clamp(1.05rem, 3.2vw, 1.9rem);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 1px 14px rgba(255, 244, 225, 0.85);
+  text-wrap: balance;
+}
+.brand-rule {
+  width: 56px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-deep), transparent);
+}
+.brand-place {
+  margin: 0;
+  font-family: var(--body);
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(1rem, 2.2vw, 1.35rem);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 1px 12px rgba(255, 244, 225, 0.85);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.capture .brand, .capture .bottom { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand { animation: none; }
+}
