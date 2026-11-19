@@ -12,6 +12,9 @@ const SLOPE = 0.05 // sand rises toward the viewer
 const sandY = (x, z) => SLOPE * z + 0.16 * Math.min(z + 3, 0) + 0.012 * Math.sin(x * 2.1 + z * 0.7) * Math.cos(z * 1.6 - x * 0.5)
 const SUN = new THREE.Vector3(2.5, 7, -6).normalize()
 
+// The whole scene runs at this fraction of its designed pace: calm, unhurried water
+const SPEED = 0.6
+
 // Everything the shaders and the timeline share
 const shore = {
   front: -3.2, // where the water's edge is (z), before lapping and wobble
@@ -347,7 +350,7 @@ function Spray() {
     return { geom, mat }
   }, [])
   useFrame(({ gl, size }, rawDt) => {
-    const dt = Math.min(rawDt, 0.05)
+    const dt = Math.min(rawDt, 0.05) * SPEED
     mat.uniforms.uScale.value = gl.getPixelRatio() * (size.height / 1080) * 1.6
     const speed = (shore.front - lastFront.current) / Math.max(dt, 1e-4)
     lastFront.current = shore.front
@@ -550,6 +553,7 @@ function useShoreTimeline() {
     let tl
     const cycle = () => {
       tl = gsap.timeline({ onComplete: cycle })
+      tl.timeScale(SPEED)
       tl.call(() => {
         Object.assign(shore, { front: -3.2, maxFront: -3.2, wet: 0, reveal: 0, crestZ: -18, crestH: 0, surge: 0 })
       })
@@ -570,7 +574,7 @@ function useShoreTimeline() {
       tl.to({}, { duration: 0.2 }, 16.6)
     }
     cycle()
-    window.__cycle = tl.duration()
+    window.__cycle = tl.duration() / SPEED // real seconds per loop, read by the recorder
     return () => tl?.kill()
   }, [])
 }
@@ -578,7 +582,7 @@ function useShoreTimeline() {
 function Driver({ u }) {
   useShoreTimeline()
   useFrame(({ clock }, dt) => {
-    const t = clock.elapsedTime
+    const t = clock.elapsedTime * SPEED
     // small waves keep lapping at the edge
     const ph = (t % 5.5) / 5.5
     const lap = ph < 0.35 ? Math.sin((ph / 0.35) * Math.PI * 0.5) : Math.cos(((ph - 0.35) / 0.65) * Math.PI * 0.5)

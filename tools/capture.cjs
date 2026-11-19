@@ -10,6 +10,7 @@ const fs = require('fs');
   const p = await b.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   p.on('pageerror', (e) => console.log('ERR', e.message));
   await p.clock.install({ time: 0 });
+  await p.clock.pauseAt(1000); // frozen: time only moves when we step it, never with real time
   await p.goto(`${process.env.URL || "http://localhost:4173"}/?capture=${orient}`);
   for (let i = 0; i < 600; i++) {
     const ready = await p.evaluate(() => !!(window.__advance && window.__cycle && window.__textReady));
