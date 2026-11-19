@@ -15,7 +15,7 @@ const NOISE_GLSL = /* glsl */ `
     vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
     return mix(mix(h21(i), h21(i+vec2(1,0)), f.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), f.x), f.y);
   }
-  float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
+  float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 4; i++){ v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
   float shore(vec3 w){ return ${SLOPE.toFixed(4)} * (w.z + ${BAY.toFixed(4)} * w.x * w.x); }
 `
 
@@ -68,7 +68,7 @@ export function CloudLayer() {
             if (d.y < 0.0) discard;
             vec2 uv = d.xz / (d.y + 0.12) * 1.4;
             vec2 q = uv + vec2(uTime * 0.004, 0.0);
-            float base = fbm(q * 0.9 + fbm(q * 0.6) * 0.8);
+            float base = fbm(q * 0.9 + noise(q * 0.6) * 0.8);
             float c = smoothstep(0.55, 0.75, base);
             c *= smoothstep(0.01, 0.08, d.y) * (1.0 - smoothstep(0.3, 0.6, d.y));
             float shade = fbm(q * 2.4 + 3.0);
@@ -81,7 +81,7 @@ export function CloudLayer() {
   useFrame(({ clock }) => (mat.uniforms.uTime.value = clock.elapsedTime))
   return (
     <mesh material={mat} frustumCulled={false} renderOrder={-1}>
-      <sphereGeometry args={[900, 64, 32]} />
+      <sphereGeometry args={[900, 32, 16]} />
     </mesh>
   )
 }
@@ -89,7 +89,7 @@ export function CloudLayer() {
 /* ---------- Sand: ripples, wet sheen at the waterline, sunlight caustics under water ---------- */
 export function Sand() {
   const geom = useMemo(() => {
-    const g = new THREE.PlaneGeometry(130, 80, 390, 240)
+    const g = new THREE.PlaneGeometry(130, 80, 260, 160)
     g.rotateX(-Math.PI / 2)
     g.translate(0, 0, -14)
     const p = g.attributes.position
@@ -158,7 +158,7 @@ export function Sand() {
     uniforms.uTime.value = clock.elapsedTime
   })
   const seabed = useMemo(() => {
-    const g = new THREE.PlaneGeometry(900, 420, 180, 84)
+    const g = new THREE.PlaneGeometry(900, 420, 90, 42)
     g.rotateX(-Math.PI / 2)
     g.translate(0, 0, -50 - 210 + 2)
     const p = g.attributes.position
@@ -275,7 +275,7 @@ export function Ocean() {
   })
   return (
     <mesh ref={ref} material={mat} rotation-x={-Math.PI / 2} position-z={-180} raycast={() => null}>
-      <planeGeometry args={[800, 420, 300, 210]} />
+      <planeGeometry args={[800, 420, 200, 120]} />
     </mesh>
   )
 }
@@ -283,7 +283,7 @@ export function Ocean() {
 /* ---------- Jungle headlands: forested ridges with granite at the waterline ---------- */
 function headlandGeometry(side) {
   const W = 90, D = 140
-  const g = new THREE.PlaneGeometry(W, D, 220, 300)
+  const g = new THREE.PlaneGeometry(W, D, 130, 180)
   g.rotateX(-Math.PI / 2)
   g.translate(side * (14 + W / 2), 0, -D / 2 + 6)
   const p = g.attributes.position
@@ -332,7 +332,7 @@ export function Headlands() {
   const left = useMemo(() => headlandGeometry(-1), [])
   const right = useMemo(() => headlandGeometry(1), [])
   const island = useMemo(() => {
-    const g = new THREE.SphereGeometry(1, 64, 32)
+    const g = new THREE.SphereGeometry(1, 40, 20)
     const p = g.attributes.position
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i)
@@ -353,7 +353,7 @@ export function Headlands() {
 
 /* ---------- Granite boulders, rounded and streaked like the Seychelles ---------- */
 function boulderGeometry(seedOffset) {
-  const g = mergeVertices(new THREE.IcosahedronGeometry(1, 6).deleteAttribute('normal').deleteAttribute('uv'))
+  const g = mergeVertices(new THREE.IcosahedronGeometry(1, 5).deleteAttribute('normal').deleteAttribute('uv'))
   const p = g.attributes.position
   const v = new THREE.Vector3()
   const colors = []

@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Environment, Lightformer, Sky as PhysicalSky } from '@react-three/drei'
+import { Environment, Lightformer, PerformanceMonitor, Sky as PhysicalSky } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette, Noise, ToneMapping } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
@@ -10,6 +10,13 @@ import { Letters } from './Letters'
 import { GoldDust } from './GoldDust'
 import { PartyMusic } from './audio'
 import { bus, sandHeight, beach, reducedMotion, goldEnv, SUN_DIR } from './store'
+
+// Phones and tablets get a lighter render: fewer pixels, no multisampling, no film grain
+const IS_MOBILE =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || Math.min(window.screen.width, window.screen.height) < 820)
+
+const MAX_DPR = IS_MOBILE ? 1.25 : 1.5
 
 const SUN_POS = new THREE.Vector3(...SUN_DIR).normalize().multiplyScalar(1000)
 
@@ -64,12 +71,12 @@ function Scene() {
         intensity={7}
         color="#fff0d8"
         castShadow
-        shadow-mapSize={[4096, 4096]}
-        shadow-camera-left={-70}
-        shadow-camera-right={70}
-        shadow-camera-top={70}
-        shadow-camera-bottom={-70}
-        shadow-camera-far={200}
+        shadow-mapSize={IS_MOBILE ? [1024, 1024] : [2048, 2048]}
+        shadow-camera-left={-28}
+        shadow-camera-right={28}
+        shadow-camera-top={28}
+        shadow-camera-bottom={-28}
+        shadow-camera-far={160}
         shadow-bias={-0.0003}
         shadow-normalBias={0.02}
       />
@@ -85,11 +92,11 @@ function Scene() {
       <Letters />
       <GoldDust />
       <CameraRig />
-      <EffectComposer multisampling={4} disableNormalPass>
+      <EffectComposer multisampling={IS_MOBILE ? 0 : 2} disableNormalPass>
         <Bloom mipmapBlur luminanceThreshold={1.4} luminanceSmoothing={0.3} intensity={0.35} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
         <Vignette offset={0.35} darkness={0.4} />
-        <Noise opacity={0.03} premultiply />
+        {!IS_MOBILE && <Noise opacity={0.03} premultiply />}
       </EffectComposer>
     </>
   )
@@ -98,6 +105,7 @@ function Scene() {
 export default function App() {
   const music = useMemo(() => new PartyMusic(), [])
   const [on, setOn] = useState(false)
+  const [dpr, setDpr] = useState(IS_MOBILE ? 1 : 1.25)
   const busy = useRef(false)
 
   useEffect(() => {
@@ -144,10 +152,17 @@ export default function App() {
     <main className="stage" onClick={toggle}>
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={dpr}
         camera={{ fov: 30, near: 0.1, far: 1200, position: [0, 6, 13] }}
-        gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.42 }}
+        gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.42 }}
       >
+        {/* drop the resolution if the device can't keep up, raise it again if it can */}
+        <PerformanceMonitor
+          onDecline={() => setDpr((d) => Math.max(0.75, d - 0.25))}
+          onIncline={() => setDpr((d) => Math.min(MAX_DPR, d + 0.25))}
+          flipflops={4}
+          onFallback={() => setDpr(0.75)}
+        />
         <Suspense fallback={null}>
           <Scene />
         </Suspense>
